@@ -28,6 +28,9 @@ function App() {
       <p className="read-the-docs">
         Click on the Vite and React logos to learn more
       </p>
+      <p className='text-red-500'>
+        This is a test of the Vite + React + Tailwind CSS + TypeScript + ESlint + Prettier template.
+      </p>
     </>
   )
 }
