@@ -31,6 +31,11 @@ function App() {
       <p className='text-red-500'>
         This is a test of the Vite + React + Tailwind CSS + TypeScript + ESlint + Prettier template.
       </p>
+      <p id='preload-test'>
+
+      </p>
+      <script>const information = document.getElementById('preload-test');
+      information.innerText = `This app is using Chrome (v${versions.chrome()}), Node.js (v${versions.node()}), and Electron (v${versions.electron()})`</script>
     </>
   )
 }
