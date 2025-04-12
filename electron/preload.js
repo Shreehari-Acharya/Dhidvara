@@ -1,8 +1,8 @@
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('versions', {
-  node: () => process.versions.node,
-  chrome: () => process.versions.chrome,
-  electron: () => process.versions.electron
-  // we can also expose variables, not just functions
+contextBridge.exposeInMainWorld('terminalAPI', {
+  sendInput: (input) => ipcRenderer.send('terminal-input', input),
+  onOutput: (callback) => ipcRenderer.on('terminal-output', (e, data) => callback(data)),
+  getTerminal: () => ipcRenderer.send('create-terminal'),
+  resizeTerminal: (cols, rows) => ipcRenderer.send('terminal-resize', { cols, rows }),
 })
