@@ -1,11 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { debounce } from '../utils/debounce.js';
 
 export default function TerminalComponent() {
   const terminalRef = useRef(null);
   const xtermRef = useRef(null);
   const fitAddonRef = useRef(null);
+  const decorationRef = useRef(null);
+  const markerRef = useRef(null);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     const term = new Terminal({
@@ -14,6 +18,7 @@ export default function TerminalComponent() {
       fontSize: 18,
       lineHeight: 1.2,
       cursorStyle: 'underline',
+      allowProposedApi: true,
       theme: {
         background: '#0F1618',
         foreground: '#ECF6EF',
@@ -46,33 +51,73 @@ export default function TerminalComponent() {
     term.loadAddon(fitAddon);
     term.open(terminalRef.current);
     
-        fitAddon.fit();
+    fitAddon.fit();
+        
+    const updateGhostText = (command) => {
 
+      // Cleanup previous decorations
+      decorationRef.current?.dispose();
+      markerRef.current?.dispose();
 
-    window.terminalAPI.onOutput((data) => term.write(data) );
+      const col = term.buffer.active.cursorX;
+
+      const marker = term.registerMarker(0);
+      if (!marker) {console.log("error creating marker"); return;}
+
+      markerRef.current = marker;
+
+      const decoration = term.registerDecoration({
+        marker,
+        x: col,
+        width: command.length,
+      });
+    
+      if (decoration) {
+        decoration.onRender(el => {
+          if(!isMountedRef.current) return;
+          el.innerText = command;
+          el.style.color = '#00FFF4';
+          el.style.opacity = '0.5';
+          el.style.pointerEvents = 'none';
+          el.style.fontStyle = 'italic';
+        });
+        decorationRef.current = decoration;
+      }
+    };
+
+    // Resize handler
+    const handleResize = () => {
+      fitAddon.fit();
+      const { cols, rows } = term;
+      window.terminalAPI.resizeTerminal(cols, rows);
+    };
+    
+    const debouncedResize = debounce(handleResize, 500);
+
+    window.terminalAPI.onOutput((data) => {
+      term.write(data);
+    });
     term.onData(data => window.terminalAPI.sendInput(data));
+
+    window.aiAPI.onSuggestedCommand((data) => {
+      if (data && data.length > 0) {
+        updateGhostText(data);
+      }
+    });
 
     window.terminalAPI.getTerminal();
 
     // Resize the terminal when the window is resized
     // This is a workaround to ensure the terminal resizes correctly
-    window.addEventListener('resize', () => {
-
-      // Fit the terminal to the container
-      fitAddon.fit(); 
-
-      // Send the new size to the main process
-      const { cols, rows } = term;
-      window.terminalAPI.resizeTerminal(cols, rows);
-    });
+    window.addEventListener('resize', debouncedResize);
 
     return () => {
+      isMountedRef.current = false;
+      decorationRef.current?.dispose();
+      markerRef.current?.dispose();
       term.dispose();
-      window.removeEventListener('resize', () => {
-        fitAddon.fit();
-        const { cols, rows } = term;
-        window.terminalAPI.resizeTerminal(cols, rows);
-      });
+      window.removeEventListener('resize', debouncedResize);
+      fitAddon.dispose();
     };
   }, []);
 
