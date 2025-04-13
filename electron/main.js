@@ -11,16 +11,17 @@ const __dirname = path.dirname(__filename);
 
 let mainWindow;
 let ptyProcess;
-
-let currentCommand = ''; // we will use it to store current command and then update history
-const maxHistorySize = 10; // we will use it to limit the size of the history
-let commandHistory = getInitialShellHistory(maxHistorySize); // we will use it to store the history of commands
-let historyIndex = commandHistory.length; // we will use it to store the index of the current command
-
-// Debounced function for getting command completion
-const debouncedSuggest = debounceAsync(getGroqCommandCompletion, 400);
+let commandState = {
+  currentCommand: '',
+  history: getInitialShellHistory(10),
+  historyIndex: getInitialShellHistory(10).length,
+  suggestedCommand: null,
+};
+const maxHistorySize = 10;
 
 const isDev = !app.isPackaged;
+
+const debouncedSuggest = debounceAsync(getGroqCommandCompletion, 300); // Reduced for responsiveness
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -29,7 +30,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
-    backgroundColor: '#1e1e1e'
+    backgroundColor: '#1e1e1e',
   });
 
   if (isDev) {
@@ -39,18 +40,12 @@ function createWindow() {
   }
 
   ipcMain.on('create-terminal', () => {
-
-    // if it exists, we will kill it, and create a new one
-    // this is to avoid multiple terminals being created
-    // and to ensure that we are not leaking memory
     if (ptyProcess) {
       ptyProcess.kill();
       ptyProcess = null;
     }
 
     try {
-      // Create a new terminal process
-      // Use node-pty to spawn a shell process
       const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash';
       ptyProcess = pty.spawn(shell, [], {
         name: 'xterm-color',
@@ -60,17 +55,16 @@ function createWindow() {
         env: process.env,
       });
 
-      // Listen for data from the terminal and send it to the renderer process
-      ptyProcess.onData(data => {
+      ptyProcess.onData((data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('terminal-output', data);
         }
       });
 
-      // When the terminal exits, send a message to the renderer process
       ptyProcess.onExit(({ exitCode }) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('terminal-output', `\n[Process exited with code ${exitCode}]\n`);
+          ptyProcess = null;
         }
       });
     } catch (error) {
@@ -81,87 +75,145 @@ function createWindow() {
     }
   });
 
-    // IPC listener for data from the renderer process
+  ipcMain.on('terminal-input', async (event, data) => {
+    if (!ptyProcess) return;
 
-    // listening on terminal-input channel, will write data to the terminal (ptyProcess)
-    ipcMain.on('terminal-input', async (event, data) => {
+    // Skip clear since frontend handles it
+    if (data !== 'clear\n') {
       ptyProcess.write(data);
-      switch (data) {
-        case '\r': // Enter key
-          if(currentCommand.trim()){
-            if(commandHistory.length >= maxHistorySize){
-              commandHistory.shift(); // remove the oldest command
+    }
+
+    switch (data) {
+      case '\r': // Enter
+        if (commandState.currentCommand.trim()) {
+          if (commandState.history.length >= maxHistorySize) {
+            commandState.history.shift();
+          }
+          commandState.history.push(commandState.currentCommand.trim());
+          commandState.historyIndex = commandState.history.length;
+          commandState.currentCommand = '';
+          commandState.suggestedCommand = null;
+        }
+        break;
+      case '\x7f': // Backspace
+        if (commandState.currentCommand.length > 0) {
+          commandState.currentCommand = commandState.currentCommand.slice(0, -1);
+          if (commandState.suggestedCommand?.next_portion) {
+            const offset = commandState.suggestedCommand.full_command.indexOf(
+              commandState.suggestedCommand.next_portion
+            );
+            if (offset > 0) {
+              const prevChar = commandState.suggestedCommand.full_command[offset - 1];
+              commandState.suggestedCommand.next_portion = prevChar + commandState.suggestedCommand.next_portion;
+              mainWindow.webContents.send('suggested-command', commandState.suggestedCommand);
             }
-            commandHistory.push(currentCommand); // add the current command to the history
-            historyIndex = commandHistory.length; // set the index to the end of the history
-            currentCommand = ''; // reset the current command
           }
-          break;
-        case '\x7f': // Backspace key
-          if (currentCommand.length > 0) {
-            currentCommand = currentCommand.slice(0, -1); // remove the last character from the current command
+        }
+        break;
+      case '\x1b[A': // Up arrow
+        if (commandState.historyIndex > 0) {
+          commandState.historyIndex--;
+          commandState.currentCommand = commandState.history[commandState.historyIndex] || '';
+          try {
+            const suggestion = await debouncedSuggest(commandState.history, commandState.currentCommand);
+            if (suggestion) {
+              commandState.suggestedCommand = suggestion;
+              mainWindow.webContents.send('suggested-command', suggestion);
+            }
+          } catch (error) {
+            console.warn('Suggestion failed:', error);
           }
+        }
+        break;
+      case '\x1b[B': // Down arrow
+        if (commandState.historyIndex < commandState.history.length) {
+          commandState.historyIndex++;
+          commandState.currentCommand =
+            commandState.historyIndex < commandState.history.length
+              ? commandState.history[commandState.historyIndex]
+              : '';
+          try {
+            const suggestion = await debouncedSuggest(commandState.history, commandState.currentCommand);
+            if (suggestion) {
+              commandState.suggestedCommand = suggestion;
+              mainWindow.webContents.send('suggested-command', suggestion);
+            }
+          } catch (error) {
+            console.warn('Suggestion failed:', error);
+          }
+        }
+        break;
+      default:
+        if (data.startsWith('\x1b')) {
           break;
-        case '\x1b[A': // Up arrow key
-          if (historyIndex > 0) {
-            historyIndex--;
-            currentCommand = commandHistory[historyIndex] + " "; // get the previous command from the history and add a space
+        }
+        commandState.currentCommand += data;
+        if(commandState.currentCommand === commandState.suggestedCommand?.full_command) {
+          commandState.suggestedCommand = null;
+          mainWindow.webContents.send('suggested-command', null);
+          break;
+        } 
+        if (
+          commandState.suggestedCommand &&
+          commandState.suggestedCommand.next_portion.startsWith(data) 
+        ) {
+          commandState.suggestedCommand.next_portion =
+            commandState.suggestedCommand.next_portion.slice(1);
+          mainWindow.webContents.send('suggested-command', commandState.suggestedCommand);
+          console.log('from samechar:', commandState.suggestedCommand);
+        } else {
+          try {
+            const suggestion = await debouncedSuggest(commandState.history, commandState.currentCommand);
+            if (suggestion) {
+              commandState.suggestedCommand = suggestion;
+              mainWindow.webContents.send('suggested-command', suggestion);
+              console.log('from groq:', suggestion);
+            }
+          } catch (error) {
+            console.warn('Suggestion failed:', error);
+            commandState.suggestedCommand = null;
+          }
+        }
+        break;
+    }
+  });
 
-            // const guessedCommand = await getGroqCommandCompletion(commandHistory, currentCommand);
-          }
-          break;
-        case '\x1b[B': // Down arrow key
-          if (historyIndex < commandHistory.length - 1) {
-            historyIndex++;
-            currentCommand = commandHistory[historyIndex] + " "; // get the next command from the history and add a space
-
-            // const guessedCommand = await getGroqCommandCompletion(commandHistory, currentCommand);
-          }
-          break;
-        default:
-          currentCommand += data; // add the character to the current command
-          
-          debouncedSuggest(commandHistory, currentCommand).then(suggestedCommand => {
-            console.log('Debounced suggested command:', suggestedCommand);
-            mainWindow.webContents.send('suggested-command', suggestedCommand); // Send suggestion to renderer
-          });
-          break;
+  ipcMain.on('terminal-resize', (event, { cols, rows }) => {
+    if (ptyProcess) {
+      try {
+        ptyProcess.resize(cols, rows);
+      } catch (error) {
+        console.warn('Resize failed:', error);
       }
-    });
+    }
+  });
 
-    // listening on terminal-resize channel, will resize the terminal (ptyProcess)
-    ipcMain.on('terminal-resize', (event, { cols, rows }) => {
-      ptyProcess?.resize(cols, rows);
-    });
-
-    // when the window is closed, kill the ptyProcess and set it to null
-    mainWindow.on('closed', () => {
-      ptyProcess?.kill();
-      ptyProcess = null;
-      mainWindow = null;
-    });
-  }
-
-app.whenReady().then(createWindow);
-  
-  // When the enrire app is closed, kill the ptyProcess to prevent errors
-  app.on('before-quit', () => {
+  mainWindow.on('closed', () => {
     if (ptyProcess) {
       ptyProcess.kill();
       ptyProcess = null;
     }
+    mainWindow = null;
   });
+}
 
-  // Quit when all windows are closed, except on macOS. There, it's common for applications and their menu bar to stay active until the user quits explicitly with Cmd + Q.
-  app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-      app.quit();
-    }
-  });
+app.whenReady().then(createWindow);
 
-  // On macOS it's common to re-create a window in the app when the dock icon is clicked and there are no other windows open.
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
+app.on('before-quit', () => {
+  if (ptyProcess) {
+    ptyProcess.kill();
+    ptyProcess = null;
+  }
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
+});

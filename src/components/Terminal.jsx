@@ -19,12 +19,12 @@ export default function TerminalComponent() {
       lineHeight: 1.2,
       cursorStyle: 'underline',
       allowProposedApi: true,
+      scrollback: 1000,
       theme: {
         background: '#0F1618',
         foreground: '#ECF6EF',
-        cursor: '#00FFF4',         
+        cursor: '#00FFF4',
         selection: '#E3F7FC',
-    
         black: '#0D1213',
         red: '#FF4545',
         green: '#58EA56',
@@ -50,19 +50,25 @@ export default function TerminalComponent() {
 
     term.loadAddon(fitAddon);
     term.open(terminalRef.current);
-    
     fitAddon.fit();
-        
+
     const updateGhostText = (command) => {
+      if (!isMountedRef.current || !command) return;
 
       // Cleanup previous decorations
       decorationRef.current?.dispose();
       markerRef.current?.dispose();
 
-      const col = term.buffer.active.cursorX;
+      const buffer = term.buffer.active;
+      const col = buffer.cursorX;
 
+      // Use cursorY directly as marker row
       const marker = term.registerMarker(0);
-      if (!marker) {console.log("error creating marker"); return;}
+      if (!marker) {
+        console.warn('Failed to create marker, retrying...');
+        setTimeout(() => updateGhostText(command), 50);
+        return;
+      }
 
       markerRef.current = marker;
 
@@ -71,19 +77,66 @@ export default function TerminalComponent() {
         x: col,
         width: command.length,
       });
-    
+
       if (decoration) {
-        decoration.onRender(el => {
-          if(!isMountedRef.current) return;
+        decoration.onRender((el) => {
+          if (!isMountedRef.current) return;
           el.innerText = command;
-          el.style.color = '#00FFF4';
-          el.style.opacity = '0.5';
+          el.style.color = '#cdcdcd';
+          el.style.opacity = '0.4';
           el.style.pointerEvents = 'none';
           el.style.fontStyle = 'italic';
+          el.style.fontSize = '18px';
+          el.style.fontFamily = 'JetBrains Mono, monospace';
+          el.style.whiteSpace = 'pre'; // Prevent wrapping
         });
         decorationRef.current = decoration;
       }
     };
+
+    // Handle terminal input
+    term.onData((data) => {
+      if (data === 'clear\n') {
+        term.reset();
+        decorationRef.current?.dispose();
+        markerRef.current?.dispose();
+      }
+      else if (data === '\t') {
+        // Handle tab completion when ghost suggestion is present
+        const fullCommand = decorationRef.current?.element.innerText;
+        if(fullCommand && fullCommand.length > 0) {
+        window.terminalAPI.sendInput(fullCommand);
+        // Clear ghost text after output to avoid stale suggestions
+        decorationRef.current?.dispose();
+        markerRef.current?.dispose();
+        }
+        else {
+          // Handle tab completion
+          window.terminalAPI.sendInput(data);
+        }
+      }
+       else {
+        window.terminalAPI.sendInput(data);
+      }
+    });
+
+    // Handle terminal output
+    window.terminalAPI.onOutput((data) => {
+      term.write(data);
+      // Clear ghost text after output to avoid stale suggestions
+      decorationRef.current?.dispose();
+      markerRef.current?.dispose();
+    });
+
+    // Handle suggested commands
+    window.aiAPI.onSuggestedCommand((data) => {
+      if (!isMountedRef.current || !data?.next_portion) return;
+      // Update ghost text immediately
+      console.log('recieved command:', data.next_portion);
+      setTimeout(() => {
+        updateGhostText(data.next_portion);
+      }, 100);
+    });
 
     // Resize handler
     const handleResize = () => {
@@ -91,24 +144,11 @@ export default function TerminalComponent() {
       const { cols, rows } = term;
       window.terminalAPI.resizeTerminal(cols, rows);
     };
-    
-    const debouncedResize = debounce(handleResize, 500);
 
-    window.terminalAPI.onOutput((data) => {
-      term.write(data);
-    });
-    term.onData(data => window.terminalAPI.sendInput(data));
-
-    window.aiAPI.onSuggestedCommand((data) => {
-      if (data && data.length > 0) {
-        updateGhostText(data);
-      }
-    });
+    const debouncedResize = debounce(handleResize, 200); // Reduced for responsiveness
 
     window.terminalAPI.getTerminal();
 
-    // Resize the terminal when the window is resized
-    // This is a workaround to ensure the terminal resizes correctly
     window.addEventListener('resize', debouncedResize);
 
     return () => {

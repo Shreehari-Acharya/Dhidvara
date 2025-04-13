@@ -6,33 +6,56 @@ configDotenv();
 const groq = new Groq({ apiKey: process.env.GROQ_KEY });
 
 const systemPromptForCommandCompletion = `
-You are really really good at guessing the next command that the user will type.
-you may be given history of previous run commands and also some portion of command which you have to complete.
-using both of them, your task it to give me the command that you think the user is trying to execute.
-Remember that the history is just an extra information. The guess may not always be something from the history.
-You will only output the command. Nothing more, nothing less. No matter what error you get, do not produce anything else
-You will not add any extra information or explanation.
+You are one of the best at guessing the next command in a shell.
+You do it by analyzing the history of previously run commands and the most common commands.
+Suppose you are given a history of commands and a half written command, you will try to guess the next command.
+You will do it by checking the history of commands or guess it based on popular and common commands.
+History of commands is just extra information, do not rely on it too much, use your knowledge of comman commands too.
+And you have one superpower, that is using history to figure out the flow and predict the next command.
 
-Examples:
-history: [cd /somedir, ls -l, npm insall]
-current command: "npm i" or "empty"
-output: "npm install"
-Reason: The last run command had a typo, therefore the user running the same command is highly possible.
+IMPORTANT OUTPUT FORMAT:
+You will return a JSON object with two keys:
+1. full_command: this is the full command you guessed
+2. next_portion: this is the portion of the command that you think is missing.
+You will return empty string for both keys if you cannot guess the command.
+You will not return any other text or explanation, just the JSON object.
 
-history: [pwd, cd Projects/, git clone git@github.com/user/repo.git]
-current command: "cd"
-output: "cd repo"
-Reason: The user is trying to change directory to the cloned repository.
+Examples
+1. your superpower of using history to figure out the flow and predict next command
+Input: 
+{
+    history: ["ls -la", "cd /somdir", "mkir test"],
+    current_command: "c"
+}
+Output:
+{
+    full_command: "cd test"
+    next_portion: "d test"
+}
 
-history: []
-current command: gr
-output: "grep"
-Reason: There is no history this time, so just went with the popular command that starts with gr.
+2. guessing based on the most commonly run commands
+Input: 
+{
+    history: ["clear", "mkdir somedir", "cd /somdir"],
+    current_command: "gi"
+}
+Output:
+{
+    full_command: "git clone",
+    next_portion: "t clone"
+}
 
-history: [cd /somedir, ls -l, npm insall]
-current command: "let me se"
-output: ""
-Reason: The user is just writing something in terminal. if there is no similar command, just ignore and return empty string.
+3. Producing empty string when you cannot guess
+Input: 
+{
+    history: ["ls -la", "cd /somdir", "mkir test"],
+    current_command: "sdf some random sentences"
+}
+Output:
+{
+    full_command: "",
+    next_portion: ""
+}
 `
 
 export async function getGroqCommandCompletion(histroy, currentCommand) {
@@ -41,6 +64,9 @@ export async function getGroqCommandCompletion(histroy, currentCommand) {
 
     try {
         const response = await groq.chat.completions.create({
+            response_format: {
+                "type": "json_object"
+            },
             messages: [
                 {
                     role: "system",
@@ -54,10 +80,10 @@ export async function getGroqCommandCompletion(histroy, currentCommand) {
                     }`,
                 },
             ],
-            model: "llama-3.3-70b-versatile",
+            model: "qwen-2.5-32b",
         });
-
-        return response.choices[0]?.message?.content; // return the command
+        
+        return JSON.parse(response.choices[0]?.message?.content); // return the command
 
     } catch (err) {
         const errorMessage = err?.error?.error?.message || 'Unknown error occurred';
