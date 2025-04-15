@@ -1,8 +1,8 @@
-import TerminalComponent from './components/Terminal';
+import TerminalTabs from "./components/terminalTabs";
 
 function App() {
   return (
-        <TerminalComponent />
+        <TerminalTabs />
   );
 }
 

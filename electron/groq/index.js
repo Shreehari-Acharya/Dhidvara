@@ -80,7 +80,7 @@ export async function getGroqCommandCompletion(histroy, currentCommand) {
                     }`,
                 },
             ],
-            model: "qwen-2.5-32b",
+            model: "meta-llama/llama-4-scout-17b-16e-instruct",
         });
         
         return JSON.parse(response.choices[0]?.message?.content); // return the command
