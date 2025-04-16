@@ -1,4 +1,3 @@
-// src/main/CommandState.js
 import { getInitialShellHistory } from '../utils/shellHistory.js';
 import { debounceAsync } from '../utils/debounceAsync.js';
 import { getGroqCommandCompletion } from '../groq/index.js';
@@ -6,7 +5,7 @@ import { getGroqCommandCompletion } from '../groq/index.js';
 class CommandState {
   constructor() {
     this.currentCommand = '';
-    this.history = getInitialShellHistory(10);
+    this.history = getInitialShellHistory(20);
     this.historyIndex = this.history.length;
     this.suggestedCommand = null;
     this.debouncedSuggest = debounceAsync(this.requestSuggestion.bind(this), 200);
@@ -22,6 +21,7 @@ class CommandState {
   }
 
   async requestSuggestion() {
+    console.log("history sending to groq", this.history);
     this.suggestedCommand = await getGroqCommandCompletion(this.history, this.currentCommand);
     return this.suggestedCommand;
   }
