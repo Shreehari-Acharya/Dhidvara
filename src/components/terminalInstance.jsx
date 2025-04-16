@@ -1,6 +1,5 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { debounce } from '../utils/debounce.js';
 
 export class TerminalInstance {
   constructor({ container, sessionId, onResize }) {
@@ -77,11 +76,10 @@ export class TerminalInstance {
     });
 
     window.aiAPI.onSuggestedCommand(this.sessionId, (suggestion) => {
-      if (suggestion?.next_portion) {
+      console.log('recieved command:', suggestion.next_portion);
+      setTimeout(() => {
         this.renderGhostText(suggestion.next_portion);
-      } else {
-        this.clearDecoration();
-      }
+      }, 100);
     });
   }
 
