@@ -1,9 +1,11 @@
 import Groq from "groq-sdk";
 import { configDotenv } from "dotenv";
+import exec from "child_process";
 
 configDotenv();
 
 const groq = new Groq({ apiKey: process.env.GROQ_KEY });
+
 
 const systemPromptForCommandCompletion = `
 You are one of the best at guessing the next command in a shell.
@@ -58,6 +60,44 @@ Output:
 }
 `
 
+const systemPromptForPerformingTask  = `
+You are one of the finest terminal guru!,specialised in performing task in terminal.
+You work on start, plan, action and output mode.
+For the given user query and available tools, plan the step by step execution, based on the planning,
+select the relevant tool from the available tool. and based on the tool selection you perform an action to call the tool.
+Wait for the observation and based on the observation from the tool call resolve the user query.
+
+Rules:
+    - Follow the Output JSON Format.
+    - Always perform one step at a time and wait for next input
+    - Carefully analyse the user query
+
+Output JSON Format:
+    {{
+        "step": "string",
+        "content": "string",
+        "function": "The name of function if the step is action",
+        "input": "The input parameter for the function",
+    }}
+
+Available Tools:
+    - run_command: Takes a command as input to execute on system and returns ouput
+
+ Example:
+    User Query: Create a new folder called projectX, move into it, and initialize it as a git repository.
+    Output: {{ "step": "plan", content": "The user wants to create a new directory named 'projectX', navigate into it, and initialize it with Git." }}
+    Output: {{ "step": "plan", "content": "To complete this task, I need to execute three sequential terminal commands: mkdir, cd, and git init." }}
+    Output: {{ "step": "action", "function": "run_command", "input": "mkdir projectX" }}
+    Output: {{ "step": "observe", "output": "" }}
+    Output: {{ "step": "plan", "content": "The directory was created successfully. Next, I will change into the 'projectX' directory." }}
+    Output: {{ "step": "action", "function": "run_command", "input": "cd projectX && pwd" }}
+    Output: {{ "step": "observe", "output": "" }}
+    Output: {{ "step": "plan", "content": "I have successfully changed into the 'projectX' directory. Now, I will initialize it as a Git repository." }}
+    Output: {{ "step": "action", "function": "run_command", "input": "git init" }}
+    Output: {{ "step": "observe", "output": "Initialised an empty git repository in /home/user/projectX" }}
+    Output: {{ "step": "output", "content": "The directory has been successfully initialized as a Git repository." }}
+`
+
 export async function getGroqCommandCompletion(histroy, currentCommand) {
 
     histroy = JSON.stringify(histroy); // convert the history array to a string
@@ -92,3 +132,62 @@ export async function getGroqCommandCompletion(histroy, currentCommand) {
     } 
 }
 
+export async function performWithGroq(taskDiscription, executeFnCallback, sessionId) {
+
+    let messages = [
+        {
+            role: "system",
+            content: systemPromptForPerformingTask,
+        },
+        {
+            role: "user",
+            content: taskDiscription,
+        },
+    ]
+
+    let parsedResponse = null;
+
+    while (true) {
+        const response = await groq.chat.completions.create({
+            
+            model: "meta-llama/llama-4-scout-17b-16e-instruct",
+            messages: messages,
+            response_format: {
+                "type": "json_object"
+            },
+        });
+
+        parsedResponse = JSON.parse(response.choices[0]?.message?.content);
+        messages.push({
+            role: "assistant",
+            content: response.choices[0]?.message?.content,
+        });
+
+        if(parsedResponse.step === "action") {
+            const functionName = parsedResponse.function;
+            const input = parsedResponse.input;
+
+            // Execute the function and get the response
+            try {
+                if(!sessionId){
+                    throw new Error("Session ID is not defined");
+                }
+                const functionResponse = await executeFnCallback(sessionId, input);
+
+                messages.push({
+                    role: "user",
+                    content: JSON.stringify({
+                        step: "observe",
+                        output: functionResponse,
+                    }),
+                });
+
+            } catch (error) {
+                console.log(`Error executing function ${functionName}:`, error);
+            }
+        }
+        else if(parsedResponse.step === "output") {
+                break
+        }
+    }
+}

@@ -1,5 +1,6 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { debounce } from '../utils/debounce';
 
 export class TerminalInstance {
   constructor({ container, sessionId, onResize }) {
@@ -43,7 +44,14 @@ export class TerminalInstance {
 
     this.markerRef = null;
     this.decorationRef = null;
-    this.onResizeCallback = onResize; 
+    this.onResizeCallback = onResize;
+    this.debouncedRenderGhost = debounce((text) => {
+      if (text) {
+        this.renderGhostText(text);
+      } else {
+        this.clearDecoration();
+      }
+    }, 800);
 
     this.initIPCListeners();
     this.setupInput();
@@ -51,20 +59,48 @@ export class TerminalInstance {
   }
 
   setupInput() {
+    let fullCommand = '';
+
+    this.term.onKey((e) => {
+      const ev = e.domEvent;
+      const key = ev.key;
+      if(key === 'Enter') {
+        if(fullCommand.trim().startsWith('@')) {
+          const command = fullCommand.trim().slice(1);
+          window.terminalAPI.sendAgentInput(this.sessionId, command);
+          this.clearDecoration();
+          fullCommand = '';
+        }
+      }
+      else if (key === 'Backspace') {
+        if (fullCommand.length > 0) {
+          this.term.write('\b \b');
+          fullCommand = fullCommand.slice(0, -1);
+        }
+      }
+    });
     this.term.onData((data) => {
       if (data === 'clear\n') {
         this.term.reset();
         this.clearDecoration();
+        fullCommand = '';
       } else if (data === '\t') {
         const ghost = this.decorationRef?.element?.innerText;
         if (ghost) {
           window.terminalAPI.sendInput(this.sessionId, ghost);
           this.clearDecoration();
+          fullCommand = '';
+        } else {
+          window.terminalAPI.sendInput(this.sessionId, data);
+          fullCommand = '';
+        }
+      } else {
+        fullCommand += data;
+        if (fullCommand.trim().startsWith('@')) {
+          this.term.write(data);
         } else {
           window.terminalAPI.sendInput(this.sessionId, data);
         }
-      } else {
-        window.terminalAPI.sendInput(this.sessionId, data);
       }
     });
   }
@@ -77,9 +113,7 @@ export class TerminalInstance {
 
     window.aiAPI.onSuggestedCommand(this.sessionId, (suggestion) => {
       console.log('recieved command:', suggestion.next_portion);
-      setTimeout(() => {
-        this.renderGhostText(suggestion.next_portion);
-      }, 100);
+      this.debouncedRenderGhost(suggestion.next_portion);
     });
   }
 
@@ -125,7 +159,7 @@ export class TerminalInstance {
       this.fitAddon.fit();
       const { cols, rows } = this.term;
       window.terminalAPI.resizeTerminal(cols, rows);
-      if(this.onResizeCallback) {
+      if (this.onResizeCallback) {
         this.onResizeCallback();
       }
     } catch (error) {

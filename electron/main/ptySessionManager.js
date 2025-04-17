@@ -42,5 +42,13 @@ export class PtySessionManager {
     }
     this.sessions.clear();
   }
+
+  async executeCommand(sessionId, command) {
+
+    const manager = this.sessions.get(sessionId);
+    if (manager) {
+      return await manager.executeCommand(command);
+    }
+  }
 }
 

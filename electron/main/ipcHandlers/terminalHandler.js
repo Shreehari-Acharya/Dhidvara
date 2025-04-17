@@ -1,6 +1,7 @@
 // src/main/ipcHandlers/terminalInputHandler.js
 import { getCommandState } from "../commandState.js";
 import { ipcMain } from "electron";
+import { performWithGroq } from "../../groq/index.js";
 
 export function setTerminalHandler(mainWindow, sessionManager) {
 
@@ -16,10 +17,8 @@ export function setTerminalHandler(mainWindow, sessionManager) {
 
     const commandState = getCommandState(sessionId);
 
-    // Don't write 'clear' — frontend handles
-    if (data !== 'clear\n') {
+
       sessionManager.writeToSession(sessionId,data);
-    }
 
     switch (data) {
       case '\r': // Enter
@@ -125,6 +124,15 @@ export function setTerminalHandler(mainWindow, sessionManager) {
   //handler for terminal resize.
   ipcMain.on('terminal-resize', (event, { cols, rows }) => {
     sessionManager.resizeSession(cols, rows);
+  });
+
+  ipcMain.on('agent-input', async (event, { sessionId, data }) => {
+
+      const executeFnCallback = (sessionId, data) => {
+        sessionManager.executeCommand(sessionId, data);
+      }
+
+      await performWithGroq(data, executeFnCallback, sessionId);
   });
 
   ipcMain.on('close-terminal-session', (event, sessionId) => {

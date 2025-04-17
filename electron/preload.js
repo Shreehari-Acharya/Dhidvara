@@ -25,6 +25,7 @@ ipcRenderer.on('terminal-exited', (event, { sessionId }) => {
 contextBridge.exposeInMainWorld('terminalAPI', {
   createTerminalSession: () => ipcRenderer.invoke('create-terminal-session'),
   sendInput: (sessionId, data) => ipcRenderer.send('terminal-input', { sessionId, data }),
+  sendAgentInput: (sessionId, data) => ipcRenderer.send('agent-input', { sessionId, data }),
   resizeTerminal: (sessionId, cols, rows) => ipcRenderer.send('resize-terminal', { sessionId, cols, rows }),
   closeTerminalSession: (sessionId) => ipcRenderer.send('close-terminal-session', sessionId),
   onOutput: (sessionId, callback) => {

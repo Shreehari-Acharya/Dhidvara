@@ -61,6 +61,32 @@ export class PtyManager {
     this.kill();
     this.mainWindow = null;
   }
+
+  executeCommand(command) {
+    return new Promise((resolve) => {
+      let output = '';
+  
+      const onData = (data) => {
+        output += data;
+  
+
+        if (output.includes('__END__')) {
+          // Safely remove the listener if the process still exists
+          if (this.ptyProcess) {
+            this.ptyProcess.removeListener('data', onData);
+          }
+          resolve(output.replace('__END__', '').trim());
+        }
+      };
+  
+      if (this.ptyProcess) {
+        this.ptyProcess.onData(onData);
+        this.ptyProcess.write(`${command}\r`);
+      } else {
+        resolve('[ERROR] Terminal not available');
+      }
+    });
+  }
 }
 
 
