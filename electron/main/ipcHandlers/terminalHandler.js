@@ -90,6 +90,8 @@ export function setTerminalHandler(mainWindow, sessionManager) {
 
         commandState.updateCommand(commandState.currentCommand + data);
 
+        if(commandState.currentCommand.trim().startsWith('@')) break;
+
         if (commandState.currentCommand === commandState.suggestedCommand?.full_command) {
           commandState.suggestedCommand = null;
           console.log('Cleared suggestion:', commandState.suggestedCommand);
