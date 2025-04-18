@@ -81,7 +81,7 @@ export class PtyManager {
   
       if (this.ptyProcess) {
         this.ptyProcess.onData(onData);
-        this.ptyProcess.write(`${command}\r`);
+        this.ptyProcess.write(`${command} && echo "__END__"\r\n`);
       } else {
         resolve('[ERROR] Terminal not available');
       }

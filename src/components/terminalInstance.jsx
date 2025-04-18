@@ -2,6 +2,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { debounce } from '../utils/debounce';
 
+
 export class TerminalInstance {
   constructor({ container, sessionId, onResize }) {
     this.term = new Terminal({
@@ -67,18 +68,21 @@ export class TerminalInstance {
       if(key === 'Enter') {
         if(fullCommand.trim().startsWith('@')) {
           const command = fullCommand.trim().slice(1);
+          if(command.length == 0){
+            this.clearDecoration();
+            new window.Notification("Pass your command after @ symbol", {
+              body: 'Command cannot be empty',
+            });
+            window.terminalAPI.sendInput(this.sessionId, '\n');
+            return;
+          }
           window.terminalAPI.sendAgentInput(this.sessionId, command);
           this.clearDecoration();
           fullCommand = '';
         }
       }
-      else if (key === 'Backspace') {
-        if (fullCommand.length > 0) {
-          this.term.write('\b \b');
-          fullCommand = fullCommand.slice(0, -1);
-        }
-      }
     });
+
     this.term.onData((data) => {
       if (data === 'clear\n') {
         this.term.reset();
@@ -94,8 +98,25 @@ export class TerminalInstance {
           window.terminalAPI.sendInput(this.sessionId, data);
           fullCommand = '';
         }
-      } else {
+      } else if(data == '\b' || data == '\x7f') {
+
+        if (fullCommand.length > 0) {
+          if(fullCommand.trim().startsWith('@')){
+            this.term.write('\b \b');
+          }
+          else {
+            window.terminalAPI.sendInput(this.sessionId, data);
+          }
+          fullCommand = fullCommand.slice(0, -1);
+          if(fullCommand.length === 0) {
+            this.clearDecoration();
+          }
+        }
+      }
+      else {
+        
         fullCommand += data;
+        console.log("Data:", fullCommand);
         if (fullCommand.trim().startsWith('@')) {
           this.term.write(data);
         } else {
@@ -112,7 +133,6 @@ export class TerminalInstance {
     });
 
     window.aiAPI.onSuggestedCommand(this.sessionId, (suggestion) => {
-      console.log('recieved command:', suggestion.next_portion);
       this.debouncedRenderGhost(suggestion.next_portion);
     });
   }

@@ -3,138 +3,99 @@ import { getCommandState } from "../commandState.js";
 import { ipcMain } from "electron";
 import { performWithGroq } from "../../groq/index.js";
 
-export function setTerminalHandler(mainWindow, sessionManager) {
-
-  ipcMain.handle('create-terminal-session', () => {
-    return sessionManager.createSession();
+function handleSuggestion(mainWindow, sessionId, commandState, suggestion) {
+  if (suggestion) {
+    mainWindow.webContents.send('suggested-command', { sessionId, suggestion });
+  } else {
+    commandState.suggestedCommand = null;
+    mainWindow.webContents.send('suggested-command', { sessionId, suggestion: null });
   }
-  );
-  // handler for terminal input
-  // this is where we handle the input from the renderer
-  // and send it to the pty process
-  // we also do suggestions from groq in here, and send it back to renderer
-  ipcMain.on('terminal-input', async (event, { sessionId, data }) => {
+}
 
-    const commandState = getCommandState(sessionId);
+async function processCommandInput(mainWindow, sessionManager, sessionId, data) {
+  const commandState = getCommandState(sessionId);
 
+  sessionManager.writeToSession(sessionId, data);
 
-      sessionManager.writeToSession(sessionId,data);
+  switch (data) {
+    case '\r': // Enter
+      if (commandState.currentCommand.trim()) {
+        commandState.addToHistory(commandState.currentCommand.trim());
+        commandState.updateCommand('');
+        commandState.suggestedCommand = null;
+      }
+      break;
 
-    switch (data) {
-      case '\r': // Enter
-        if (commandState.currentCommand.trim()) {
-          commandState.addToHistory(commandState.currentCommand.trim());
-          commandState.updateCommand('');
-          commandState.suggestedCommand = null;
-        }
-        break;
-
-      case '\x7f': // Backspace
-        if (commandState.currentCommand.length > 0) {
-          commandState.updateCommand(commandState.currentCommand.slice(0, -1));
-
-          // Reconstruct next portion
-          const suggestion = commandState.suggestedCommand;
-          if (suggestion?.next_portion) {
-            const offset = suggestion.full_command.indexOf(suggestion.next_portion);
-            if (offset > 0) {
-              const prevChar = suggestion.full_command[offset - 1];
-              suggestion.next_portion = prevChar + suggestion.next_portion;
-              console.log('Updated suggestion from backspace:', suggestion);
-              mainWindow.webContents.send('suggested-command', {sessionId: sessionId, suggestion: suggestion });
-            }
+    case '\x7f': // Backspace
+      if (commandState.currentCommand.length > 0) {
+        commandState.updateCommand(commandState.currentCommand.slice(0, -1));
+        const suggestion = commandState.suggestedCommand;
+        if (suggestion?.next_portion) {
+          const offset = suggestion.full_command.indexOf(suggestion.next_portion);
+          if (offset > 0) {
+            suggestion.next_portion = suggestion.full_command[offset - 1] + suggestion.next_portion;
+            handleSuggestion(mainWindow, sessionId, commandState, suggestion);
           }
         }
-        break;
+      }
+      break;
 
-      case '\x1b[A': // Up arrow
-        if (commandState.historyIndex > 0) {
-          commandState.historyIndex--;
-          commandState.updateCommand(commandState.history[commandState.historyIndex]);
-
-          try {
-            const suggestion = await commandState.debouncedSuggest();
-            if (suggestion){
-              console.log('Updated suggestion from up arrow:', suggestion);
-              mainWindow.webContents.send('suggested-command', {sessionId: sessionId, suggestion: suggestion});
-            } 
-          } catch (err) {
-            console.warn('Suggestion failed:', err);
-          }
+    case '\x1b[A': // Up arrow
+    case '\x1b[B': // Down arrow
+      const isUpArrow = data === '\x1b[A';
+      const historyIndex = commandState.historyIndex + (isUpArrow ? -1 : 1);
+      if (historyIndex >= 0 && historyIndex <= commandState.history.length) {
+        commandState.historyIndex = historyIndex;
+        const nextCommand = commandState.history[historyIndex] || '';
+        commandState.updateCommand(nextCommand);
+        try {
+          const suggestion = await commandState.debouncedSuggest();
+          handleSuggestion(mainWindow, sessionId, commandState, suggestion);
+        } catch (err) {
+          console.warn('Suggestion failed:', err);
         }
+      }
+      break;
+
+    default:
+      if (data.startsWith('\x1b')) break; // Skip escape sequences
+
+      commandState.updateCommand(commandState.currentCommand + data);
+
+      if (commandState.currentCommand === commandState.suggestedCommand?.full_command) {
+        handleSuggestion(mainWindow, sessionId, commandState, null);
         break;
+      }
 
-      case '\x1b[B': // Down arrow
-        if (commandState.historyIndex < commandState.history.length) {
-          commandState.historyIndex++;
-          const nextCommand =
-            commandState.historyIndex < commandState.history.length
-              ? commandState.history[commandState.historyIndex]
-              : '';
-          commandState.updateCommand(nextCommand);
-
-          try {
-            const suggestion = await commandState.debouncedSuggest();
-            if (suggestion){
-              console.log('Updated suggestion from down arrow:', suggestion);
-              mainWindow.webContents.send('suggested-command', {sessionId:sessionId, suggestion: suggestion});
-            } 
-          } catch (err) {
-            console.warn('Suggestion failed:', err);
-          }
+      if (commandState.suggestedCommand?.next_portion.startsWith(data)) {
+        commandState.suggestedCommand.next_portion = commandState.suggestedCommand.next_portion.slice(1);
+        handleSuggestion(mainWindow, sessionId, commandState, commandState.suggestedCommand);
+      } else {
+        try {
+          const suggestion = await commandState.debouncedSuggest();
+          handleSuggestion(mainWindow, sessionId, commandState, suggestion);
+        } catch (error) {
+          console.warn('Suggestion failed:', error);
         }
-        break;
+      }
+      break;
+  }
+}
 
-      default:
-        if (data.startsWith('\x1b')) break; // Skip escape sequences
+export function setTerminalHandler(mainWindow, sessionManager) {
+  ipcMain.handle('create-terminal-session', () => sessionManager.createSession());
 
-        commandState.updateCommand(commandState.currentCommand + data);
-
-        if(commandState.currentCommand.trim().startsWith('@')) break;
-
-        if (commandState.currentCommand === commandState.suggestedCommand?.full_command) {
-          commandState.suggestedCommand = null;
-          console.log('Cleared suggestion:', commandState.suggestedCommand);
-          mainWindow.webContents.send('suggested-command', {sessionId:sessionId, suggestion:null});
-          break;
-        }
-
-        if (
-          commandState.suggestedCommand &&
-          commandState.suggestedCommand.next_portion.startsWith(data)
-        ) {
-          commandState.suggestedCommand.next_portion =
-            commandState.suggestedCommand.next_portion.slice(1);
-          console.log('Updated suggestion:', commandState.suggestedCommand);
-          mainWindow.webContents.send('suggested-command', {sessionId:sessionId, suggestion:commandState.suggestedCommand});
-        } else {
-          try {
-            const suggestion = await commandState.debouncedSuggest();
-            if (suggestion) {
-              console.log('Updated suggestion from groq:', suggestion);
-              mainWindow.webContents.send('suggested-command', {sessionId:sessionId, suggestion:suggestion});
-            }
-          } catch (error) {
-            console.warn('Suggestion failed:', error);
-            commandState.suggestedCommand = null;
-          }
-        }
-        break;
-    }
+  ipcMain.on('terminal-input', (event, { sessionId, data }) => {
+    processCommandInput(mainWindow, sessionManager, sessionId, data);
   });
 
-  //handler for terminal resize.
   ipcMain.on('terminal-resize', (event, { cols, rows }) => {
     sessionManager.resizeSession(cols, rows);
   });
 
   ipcMain.on('agent-input', async (event, { sessionId, data }) => {
-
-      const executeFnCallback = (sessionId, data) => {
-        sessionManager.executeCommand(sessionId, data);
-      }
-
-      await performWithGroq(data, executeFnCallback, sessionId);
+    const executeFnCallback = async (sessionId, data) => { return await sessionManager.executeCommand(sessionId, data) };
+    await performWithGroq(data, executeFnCallback, sessionId);
   });
 
   ipcMain.on('close-terminal-session', (event, sessionId) => {

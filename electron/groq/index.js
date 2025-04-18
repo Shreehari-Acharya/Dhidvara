@@ -1,6 +1,5 @@
 import Groq from "groq-sdk";
 import { configDotenv } from "dotenv";
-import exec from "child_process";
 
 configDotenv();
 
@@ -173,7 +172,6 @@ export async function performWithGroq(taskDiscription, executeFnCallback, sessio
                     throw new Error("Session ID is not defined");
                 }
                 const functionResponse = await executeFnCallback(sessionId, input);
-
                 messages.push({
                     role: "user",
                     content: JSON.stringify({
