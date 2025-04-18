@@ -98,11 +98,11 @@ export default function TerminalTabs() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex space-x-2 p-2 bg-gray-900 text-white">
+      <div className="flex space-x-1 bg-gray-900 text-white">
         {sessions.map(id => (
           <div
             key={id}
-            className={`flex items-center space-x-1 px-2 py-1 rounded ${
+            className={`flex items-center px-2 rounded-t-md py-1 ${
               id === activeSessionId ? 'bg-gray-700' : 'bg-gray-800'
             }`}
           >
@@ -122,7 +122,7 @@ export default function TerminalTabs() {
         ))}
         <button
           onClick={addTab}
-          className="ml-2 px-2 py-1 bg-blue-500 rounded hover:bg-blue-600"
+          className=" px-2 bg-blue-500 rounded-t-md hover:bg-blue-600"
         >
           + New Tab
         </button>

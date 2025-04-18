@@ -185,6 +185,7 @@ export async function performWithGroq(taskDiscription, executeFnCallback, sessio
             }
         }
         else if(parsedResponse.step === "output") {
+                console.log(parsedResponse.content);
                 break
         }
     }

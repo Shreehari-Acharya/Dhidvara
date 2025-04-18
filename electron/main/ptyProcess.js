@@ -75,6 +75,7 @@ export class PtyManager {
           if (this.ptyProcess) {
             this.ptyProcess.removeListener('data', onData);
           }
+          console.log('Output:', output);
           resolve(output.replace('__END__', '').trim());
         }
       };
