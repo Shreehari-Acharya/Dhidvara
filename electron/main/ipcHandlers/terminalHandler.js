@@ -110,7 +110,7 @@ export function setTerminalHandler(mainWindow, sessionManager) {
       return;
     }
     const executeFnCallback = async (sessionId, data) => { return await sessionManager.executeCommand(sessionId, data) };
-    await performWithGroq(data, executeFnCallback, sessionId);
+    await performWithGroq(data, executeFnCallback, sessionId, mainWindow);
   });
 
   ipcMain.on('close-terminal-session', (event, sessionId) => {

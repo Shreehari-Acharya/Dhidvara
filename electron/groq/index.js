@@ -3,6 +3,14 @@ import { configDotenv } from "dotenv";
 import { systemPromptForCommandCompletion, systemPromptForPerformingTask } from "./systemPrompts.js";
 import { getApiKey } from "../config/settings.js";
 
+function sanitizeForTerminal(text) {
+    return text
+      .replace(/\r?\n/g, '\r\n')        // Normalize line endings for xterm
+      .replace(/[ \t]+/g, ' ')          // Replace multiple spaces/tabs with one space
+      .replace(/\r\n(\r\n)+/g, '\r\n')  // Collapse multiple blank lines
+      .trim();                          // Remove leading/trailing whitespace
+  }
+
 configDotenv();
 const apiKey = getApiKey();
 
@@ -46,7 +54,7 @@ export async function getGroqCommandCompletion(histroy, currentCommand) {
     } 
 }
 
-export async function performWithGroq(taskDiscription, executeFnCallback, sessionId) {
+export async function performWithGroq(taskDiscription, executeFnCallback, sessionId, mainWindow) {
 
     let messages = [
         {
@@ -87,6 +95,7 @@ export async function performWithGroq(taskDiscription, executeFnCallback, sessio
                     throw new Error("Session ID is not defined");
                 }
                 const functionResponse = await executeFnCallback(sessionId, input);
+                // fs.appendFileSync(`./funRes.txt`,  functionResponse + '\n');
                 messages.push({
                     role: "user",
                     content: JSON.stringify({
@@ -100,7 +109,14 @@ export async function performWithGroq(taskDiscription, executeFnCallback, sessio
             }
         }
         else if(parsedResponse.step === "output") {
-                // console.log(parsedResponse.content);
+                console.log(`Output: ${parsedResponse.content}`);
+                const cleanedOutput = sanitizeForTerminal(parsedResponse.content);
+                mainWindow.webContents.send('terminal-output', {
+                    sessionId: sessionId,
+                    data: cleanedOutput,
+                });
+                // write the whole message to a file
+                // fs.appendFileSync(`./logs.txt`,  messages.map(m => m.content).join('\n') + '\n');
                 break
         }
     }

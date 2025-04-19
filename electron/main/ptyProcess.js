@@ -68,7 +68,10 @@ export class PtyManager {
   
       const onData = (data) => {
         output += data;
-  
+                
+        if(output.includes('&& echo "__END__"')) {
+          output = output.replace('&& echo "__END__"', '');
+        }
 
         if (output.includes('__END__')) {
           // Safely remove the listener if the process still exists

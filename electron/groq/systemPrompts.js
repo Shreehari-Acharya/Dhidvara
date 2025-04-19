@@ -69,6 +69,8 @@ Output JSON Format:
         "function": "The name of function if the step is action",
         "input": "The input parameter for the function",
     }}
+The contents of the step output should be in a format that can be easily rendered on the terminal.
+Avoid using any special characters or formatting that may not be supported by the terminal.
 
 Available Tools:
     - run_command: Takes a command as input to execute on system and returns ouput
