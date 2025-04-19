@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { TerminalInstance } from './terminalInstance';
 import { debounce } from '../utils/debounce';
 import { useNavigate } from "react-router-dom";
+import { CirclePlus } from 'lucide-react';
+import { Settings } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 
 export default function TerminalTabs() {
   const [sessions, setSessions] = useState([]);
@@ -104,7 +107,7 @@ export default function TerminalTabs() {
         {sessions.map(id => (
           <div
             key={id}
-            className={`flex items-center px-2 rounded-t-md py-1 ${
+            className={`flex items-center px-2 space-x-2 py-1 bg-gradient-to-b from-blue-950 to-blue-900 ${
               id === activeSessionId ? 'bg-gray-700' : 'bg-gray-800'
             }`}
           >
@@ -118,21 +121,21 @@ export default function TerminalTabs() {
               onClick={() => closeTab(id)}
               className="text-red-500 hover:text-red-400 focus:outline-none"
             >
-              ×
+              <Trash2 size={16} />
             </button>
           </div>
         ))}
         <button
           onClick={addTab}
-          className=" px-2 bg-blue-500 rounded-t-md hover:bg-blue-600"
+          className="px-1 rounded-2xl"
         >
-          + New Tab
+          <CirclePlus size={20} />
         </button>
         <button
           onClick={() => navigate('/settings')}
-          className=" px-2 bg-gray-500 rounded-t-md hover:bg-gray-600"
+          className=" px-2 rounded-t-md "
         >
-          Settings
+          <Settings size={18} />
         </button>
       </div>
       <div className="flex-grow relative">
