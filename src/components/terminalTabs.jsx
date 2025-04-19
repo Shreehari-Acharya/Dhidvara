@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { TerminalInstance } from './terminalInstance';
 import { debounce } from '../utils/debounce';
+import { useNavigate } from "react-router-dom";
 
 export default function TerminalTabs() {
   const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const containerRefs = useRef({});
   const terminals = useRef({});
+  const navigate = useNavigate();
 
   const handleResize = useRef(
     debounce(() => {
@@ -97,7 +99,7 @@ export default function TerminalTabs() {
   }, [handleResize]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-gray-950">
       <div className="flex space-x-1 bg-gray-900 text-white">
         {sessions.map(id => (
           <div
@@ -125,6 +127,12 @@ export default function TerminalTabs() {
           className=" px-2 bg-blue-500 rounded-t-md hover:bg-blue-600"
         >
           + New Tab
+        </button>
+        <button
+          onClick={() => navigate('/settings')}
+          className=" px-2 bg-gray-500 rounded-t-md hover:bg-gray-600"
+        >
+          Settings
         </button>
       </div>
       <div className="flex-grow relative">

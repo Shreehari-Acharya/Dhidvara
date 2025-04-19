@@ -49,7 +49,6 @@ export class PtySessionManager {
     if (manager) {
       
       const res =  await manager.executeCommand(command);
-      console.log("Response from exec:", res)
       return res;
     }
   }

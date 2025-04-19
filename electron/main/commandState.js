@@ -21,7 +21,6 @@ class CommandState {
   }
 
   async requestSuggestion() {
-    console.log("history sending to groq", this.history);
     this.suggestedCommand = await getGroqCommandCompletion(this.history, this.currentCommand);
     return this.suggestedCommand;
   }

@@ -2,6 +2,10 @@
 import { getCommandState } from "../commandState.js";
 import { ipcMain } from "electron";
 import { performWithGroq } from "../../groq/index.js";
+import { getSettings } from "../../config/settings.js";
+import { Notification } from "electron";
+
+const { aiSuggestionsEnabled,aiEnabled } = getSettings();
 
 function handleSuggestion(mainWindow, sessionId, commandState, suggestion) {
   if (suggestion) {
@@ -16,6 +20,10 @@ async function processCommandInput(mainWindow, sessionManager, sessionId, data) 
   const commandState = getCommandState(sessionId);
 
   sessionManager.writeToSession(sessionId, data);
+
+  if(!aiSuggestionsEnabled) {
+    return;
+  }
 
   switch (data) {
     case '\r': // Enter
@@ -94,6 +102,13 @@ export function setTerminalHandler(mainWindow, sessionManager) {
   });
 
   ipcMain.on('agent-input', async (event, { sessionId, data }) => {
+    if(!aiEnabled) {
+      new Notification({
+        title: 'Agent Input Disabled',
+        body: 'Agent input is disabled in the current settings.',
+      }).show();
+      return;
+    }
     const executeFnCallback = async (sessionId, data) => { return await sessionManager.executeCommand(sessionId, data) };
     await performWithGroq(data, executeFnCallback, sessionId);
   });

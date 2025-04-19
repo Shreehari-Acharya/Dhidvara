@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { setTerminalHandler } from './main/ipcHandlers/terminalHandler.js';
 import { PtySessionManager } from './main/ptySessionManager.js';
+import { setSettingsHandler } from './main/ipcHandlers/settingHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,7 +28,7 @@ async function createWindow() {
   } else {
     await mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
-
+  setSettingsHandler(mainWindow);
   setTerminalHandler(mainWindow, ptySessions);
 
   mainWindow.on('closed', () => {

@@ -50,3 +50,8 @@ contextBridge.exposeInMainWorld('aiAPI', {
     suggestionCallbacks.delete(sessionId);
   },
 });
+
+contextBridge.exposeInMainWorld("settingsAPI", {
+  getSettings: () => ipcRenderer.invoke("get-settings"),
+  updateSettings: (values) => ipcRenderer.invoke("update-settings", values),
+});
