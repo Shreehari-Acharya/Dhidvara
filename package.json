@@ -6,8 +6,9 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
-    "build": "vite build",
+    "build:renderer": "vite build",
     "lint": "eslint .",
+    "build": "npm run build:renderer && electron-builder",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -33,10 +34,38 @@
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^34.4.1",
+    "electron-builder": "^26.0.12",
     "eslint": "^9.21.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^15.15.0",
     "vite": "^6.2.0"
+  },
+  "build": {
+    "appId": "com.dhidvara.app",
+    "productName": "Dhidvara",
+    "directories": {
+      "buildResources": "assets",
+      "output": "build"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/.*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.js"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }

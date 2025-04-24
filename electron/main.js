@@ -25,11 +25,11 @@ async function createWindow() {
   });
 
   const ptySessions = new PtySessionManager(mainWindow);
-  if (isDev) {
-    await mainWindow.loadURL('http://localhost:5173');
-  } else {
+  // if (isDev) {
+  //   await mainWindow.loadURL('http://localhost:5173');
+  // } else {
     await mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
+  // }
   setSettingsHandler(mainWindow);
   setTerminalHandler(mainWindow, ptySessions);
 
