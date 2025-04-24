@@ -118,7 +118,7 @@ npm run dev
 ## OR
 
 ### Download the AppImage
-[Download Dhidvara for Linux](https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest/download/Dhidvara.AppImage)
+[Download Dhidvara for Linux](https://github.com/Shreehari-Acharya/Dhidvara/releases/download/v1.0-beta/Dhidvara.AppImage)
 
 
 Go to setting and then add your groq API key and enable AI suggestions and Agent to turn your terminal into a super terminal!
