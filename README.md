@@ -80,7 +80,7 @@ X/Twitter: [06_shreehari](https://x.com/06_Shreehari)
 
 ## 📽️ Demo & Deliverables
 
-- **Demo Video Link:** [Link](https://drive.google.com/file/d/1uKukVpVGmuYwPB74H00q4H46JdGeImkZ/view?usp=sharing)  
+- **Demo Video Link:** [Link](https://drive.google.com/file/d/1nGD_CWn-VipC7XaFmoSyvw_2l5lkja1J/view?usp=sharing)  
 - **Pitch Deck / PPT Link:** [Link](https://docs.google.com/presentation/d/1Fa7aN564R6VkYzcieYHNFseEV7bYfg3NX0BA8Tib4TY/edit?usp=sharing)
 
 ---
